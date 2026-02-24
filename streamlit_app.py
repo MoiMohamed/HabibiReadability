@@ -324,7 +324,7 @@ def to_song_level(df, *, method: str) -> "pd.DataFrame":
 def render_reproducibility_section() -> None:
     st.markdown(
         """
-### How these results were obtained (reproducibility)
+### Reproducibility
 
 The figures in this app are **summaries of readability predictions** produced by the scripts
 `preprocess_habibi_d3tok.py` and `predict_readability_camel.py`, then aggregated/visualized by
@@ -347,49 +347,49 @@ The figures in this app are **summaries of readability predictions** produced by
         """
     )
 
-    with st.expander("Exact commands (as used by the provided scripts)"):
-        st.code(
-            """\
-# 1) (Optional) Create D3TOK version of lyrics (adds Lyrics_d3tok column)
-python preprocess_habibi_d3tok.py \\
-  --input habibi.csv \\
-  --output habibi_d3tok.csv \\
-  --db calima-msa-s31.db
+#     with st.expander("Exact commands (as used by the provided scripts)"):
+#         st.code(
+#             """\
+# # 1) (Optional) Create D3TOK version of lyrics (adds Lyrics_d3tok column)
+# python preprocess_habibi_d3tok.py \\
+#   --input habibi.csv \\
+#   --output habibi_d3tok.csv \\
+#   --db calima-msa-s31.db
 
-# 2a) Predict readability on D3TOK text (recommended for this model)
-python predict_readability_camel.py \\
-  --input habibi_d3tok.csv \\
-  --output habibi_d3tok_readability.csv \\
-  --text_col Lyrics_d3tok
+# # 2a) Predict readability on D3TOK text (recommended for this model)
+# python predict_readability_camel.py \\
+#   --input habibi_d3tok.csv \\
+#   --output habibi_d3tok_readability.csv \\
+#   --text_col Lyrics_d3tok
 
-# 2b) Predict readability on raw lyrics (no D3TOK preprocessing)
-python predict_readability_camel.py \\
-  --input habibi.csv \\
-  --output habibi_raw_readability.csv \\
-  --text_col Lyrics
+# # 2b) Predict readability on raw lyrics (no D3TOK preprocessing)
+# python predict_readability_camel.py \\
+#   --input habibi.csv \\
+#   --output habibi_raw_readability.csv \\
+#   --text_col Lyrics
 
-# 3) Verse-level plots (01/02/05 are a subset of the outputs)
-python analyze_habibi_readability.py \\
-  --input habibi_d3tok_readability.csv \\
-  --outdir habibi_d3tok_readability_plots
+# # 3) Verse-level plots (01/02/05 are a subset of the outputs)
+# python analyze_habibi_readability.py \\
+#   --input habibi_d3tok_readability.csv \\
+#   --outdir habibi_d3tok_readability_plots
 
-python analyze_habibi_readability.py \\
-  --input habibi_raw_readability.csv \\
-  --outdir habibi_raw_readability_plots
+# python analyze_habibi_readability.py \\
+#   --input habibi_raw_readability.csv \\
+#   --outdir habibi_raw_readability_plots
 
-# 4) Song-level plots (creates mean/ and max/ subfolders)
-python analyze_habibi_readability_song_level.py \\
-  --input habibi_d3tok_readability.csv \\
-  --outdir habibi_d3tok_song_readability_plots \\
-  --methods mean max
+# # 4) Song-level plots (creates mean/ and max/ subfolders)
+# python analyze_habibi_readability_song_level.py \\
+#   --input habibi_d3tok_readability.csv \\
+#   --outdir habibi_d3tok_song_readability_plots \\
+#   --methods mean max
 
-python analyze_habibi_readability_song_level.py \\
-  --input habibi_raw_readability.csv \\
-  --outdir habibi_raw_song_readability_plots \\
-  --methods mean max
-""",
-            language="bash",
-        )
+# python analyze_habibi_readability_song_level.py \\
+#   --input habibi_raw_readability.csv \\
+#   --outdir habibi_raw_song_readability_plots \\
+#   --methods mean max
+# """,
+#             language="bash",
+#         )
 
 
 def render_verse_level_section(*, title: str, csv_filename: str) -> None:

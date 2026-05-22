@@ -1568,6 +1568,11 @@ def render_dist_155k_text_length_section() -> None:
 
     render_text_length_insight()
 
+    from tarab_model_experimentation.presentation_insights import (
+        render_training_variant_overview_insight,
+    )
+
+    render_training_variant_overview_insight()
     render_dist_155k_aldi_ags_heatmaps(dist_df)
 
 

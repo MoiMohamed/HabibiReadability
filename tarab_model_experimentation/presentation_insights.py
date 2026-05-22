@@ -361,6 +361,22 @@ def render_text_length_insight() -> None:
     )
 
 
+def render_training_variant_overview_insight() -> None:
+    """Before ALDi × AGS and song/poem charts: context only, not the current fix focus."""
+    render_insight_card(
+        tag="Insight",
+        title="ALDi × AGS and song/poem: training-set overview for later",
+        bullets=[
+            "The panels below summarize **dist_155K** training mix only: **ALDi × AGS** "
+            "label pairs (BAREC vs Tarab pseudo) and **song vs poem** share by readability "
+            "level. They are here for completeness, not as the main diagnosis in this update.",
+            "Variant-aware matching (pseudo-label type, ALDi/AGS alignment with BAREC) is "
+            "worth exploring **after** we address the dominant issues already flagged above: "
+            "**text length** covariate shift and **vocabulary** overlap with BAREC.",
+        ],
+    )
+
+
 def render_shift_vs_confidence_insight() -> None:
     """After the predicted-class-distribution chart in the prediction analysis."""
     render_insight_card(

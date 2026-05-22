@@ -844,16 +844,13 @@ def _marginal_divergences_from_joint(
 def _spearman_divergence_vs_penalty(
     overlap_df, *, divergence_col: str, penalty_df
 ) -> tuple[float | None, float | None, int]:
-    from scipy.stats import spearmanr
+    from tarab_model_experimentation.confusion_comparison import _spearman_rho
 
     merged = overlap_df.merge(penalty_df, on="level", how="inner")
     if len(merged) < 3:
         return None, None, len(merged)
-    rho, pval = spearmanr(
-        merged[divergence_col].to_numpy(dtype=float),
-        merged["delta_penalty"].to_numpy(dtype=float),
-    )
-    return float(rho), float(pval), len(merged)
+    rho = _spearman_rho(merged[divergence_col], merged["delta_penalty"])
+    return rho, None, len(merged)
 
 
 @st.cache_data(show_spinner=False)

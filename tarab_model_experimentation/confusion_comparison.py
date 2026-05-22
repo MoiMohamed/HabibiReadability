@@ -422,12 +422,16 @@ def _bubble_sizes(support_series, *, ref: float | None = None) -> list[float]:
 
 
 def _spearman_rho(x, y) -> float | None:
+    """Spearman ρ via ranked Pearson (no scipy — Streamlit Cloud has pandas only)."""
     import pandas as pd
 
     pair = pd.DataFrame({"x": x, "y": y}).dropna()
     if len(pair) < 3:
         return None
-    return float(pair["x"].corr(pair["y"], method="spearman"))
+    rx = pair["x"].rank(method="average")
+    ry = pair["y"].rank(method="average")
+    rho = rx.corr(ry, method="pearson")
+    return None if pd.isna(rho) else float(rho)
 
 
 def _pad_scatter_limits(ax, df, *, x_col: str, y_col: str, pad_frac: float = 0.12) -> None:

@@ -295,7 +295,7 @@ def _plot_confusion_delta_heatmap(
             color = "white" if abs(v) > limit * 0.55 else "black"
             ax.text(c, r, f"{v:+d}", ha="center", va="center", fontsize=6, color=color)
 
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Δ count (dist − baseline)")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Δ count (dist_155K − baseline)")
     fig.tight_layout()
     return fig
 
@@ -491,7 +491,7 @@ def _plot_confidence_vs_delta_precision_bubble(df):
     _pad_scatter_limits(ax, df, x_col="confidence_pct", y_col="delta_precision")
     ax.axhline(0, color="#888888", linewidth=0.7, linestyle="--", alpha=0.7)
     ax.set_xlabel("Median Tarab pseudo-label confidence (%)")
-    ax.set_ylabel("Δ precision (dist − baseline)")
+    ax.set_ylabel("Δ precision (dist_155K − baseline)")
     ax.set_title("Confidence × support × precision change (all 19 levels)")
     ax.grid(True, alpha=0.2)
     ax.spines[["top", "right"]].set_visible(False)
@@ -554,7 +554,7 @@ def _plot_confidence_vs_delta_precision_faceted(df):
         if rho is not None:
             _annotate_spearman_rho(ax, rho, n=len(part))
 
-    axes[0].set_ylabel("Δ precision (dist − baseline)")
+    axes[0].set_ylabel("Δ precision (dist_155K − baseline)")
     fig.suptitle(
         f"Confidence vs Δ precision by dev support\n{stats_line}",
         y=1.04,
@@ -1089,18 +1089,21 @@ def _render_qwk_contribution_chart(compare_labels: tuple[str, str]) -> None:
         st.info("Could not compute per-class gain/loss (dev prediction CSVs needed).")
         return
 
+    _, dist_label = compare_labels
+    dist_latex = dist_label.replace("_", r"\_")
     st.markdown("#### Decomposing the QWK gap")
     st.markdown(
         "QWK penalizes errors by *squared distance* on the "
         "level scale. The full penalty for true level *c* is:\n\n"
         r"$$\text{penalty}_c \;=\; \frac{1}{(K-1)^2}\sum_{i\,:\,y_i=c}(\hat{y}_i-y_i)^2$$"
         "\n\nwith $K=19$. Each **dev true readability level** is shown three ways on "
-        "the same rows: **gain** (green) = summed squared-error reductions where dist "
-        "beat baseline; **loss** (red) = summed increases where dist was worse; "
-        "**net** (diamond) = "
-        r"$\Delta_c=\text{gain}_c+\text{loss}_c=\text{penalty}^{\text{baseline}}_c-\text{penalty}^{\text{dist}}_c$."
-        " Positive net means dist lowered penalty on that level overall; negative net "
-        "means it raised penalty. Because QWK is exactly the same "
+        "the same rows: **gain** (green) = summed squared-error reductions where "
+        f"**{dist_label}** beat baseline; **loss** (red) = summed increases where "
+        f"**{dist_label}** was worse than baseline; **net** (diamond) = "
+        rf"$\Delta_c=\text{{gain}}_c+\text{{loss}}_c="
+        rf"\text{{penalty}}^{{\text{{baseline}}}}_c-\text{{penalty}}^{{\text{{{dist_latex}}}}}_c$."
+        f" Positive net means **{dist_label}** lowered penalty on that level overall; "
+        f"negative net means **{dist_label}** raised penalty. Because QWK is exactly the same "
         r"squared-error penalty normalized by the expected-by-chance penalty"
         " ($\\kappa=1-\\frac{\\sum p_{ij}w_{ij}}{\\sum e_{ij}w_{ij}}$ with "
         r"$w_{ij}=(i-j)^2/(K-1)^2$), these per-class bars are the additive "
@@ -1154,8 +1157,8 @@ def _qwk_driver_narrative(loaded: dict[str, dict[str, Any]], compare_labels: tup
     )
     if top_help is not None and top_hurt is not None:
         text += (
-            f" Largest penalty reduction (dist better): **L{int(top_help['level'])}**; "
-            f"largest increase (dist worse): **L{int(top_hurt['level'])}**."
+            f" Largest penalty reduction ({short_exp} better): **L{int(top_help['level'])}**; "
+            f"largest increase ({short_exp} worse): **L{int(top_hurt['level'])}**."
         )
     return text
 
@@ -1219,13 +1222,15 @@ def _render_far_off_mistakes_section(
         far_off_mistake_insight_stats,
     )
 
-    st.markdown("#### Sanity Check: Far-off mistakes dist adds vs baseline (|err| ≥ 7)")
+    st.markdown(
+        "#### Sanity Check: Far-off mistakes dist_155K adds vs baseline (|err| ≥ 7)"
+    )
     examples, err = build_far_off_mistake_examples_table(loaded, compare_labels)
     if err:
         st.info(err)
     elif examples is not None and not examples.empty:
         st.caption(
-            f"{len(examples)} dev examples where **dist** is ≥7 levels off and "
+            f"{len(examples)} dev examples where **dist_155K** is ≥7 levels off and "
             f"**baseline was less wrong**."
         )
         st.dataframe(examples, width="stretch", hide_index=True)
@@ -1238,7 +1243,7 @@ def _render_far_off_mistakes_section(
             render_far_off_mistakes_insight(stats)
     else:
         st.caption(
-            "No extra far-off dist mistakes vs baseline at the best-QWK checkpoints."
+            "No extra far-off dist_155K mistakes vs baseline at the best-QWK checkpoints."
         )
 
 
@@ -1256,11 +1261,11 @@ def _render_qwk_shift_analysis(compare_labels: tuple[str, str]) -> None:
             st.dataframe(
                 show.rename(
                     columns={
-                        "delta_penalty": "net (baseline − dist)",
+                        "delta_penalty": "net (baseline − dist_155K)",
                         "gain_positive": "gain on rows",
                         "loss_negative": "loss on rows",
                         "penalty_baseline": "baseline penalty",
-                        "penalty_dist": "dist penalty",
+                        "penalty_dist": "dist_155K penalty",
                     }
                 ),
                 width="stretch",

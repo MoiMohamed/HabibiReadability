@@ -480,7 +480,7 @@ def render_qwk_contribution_insight(
                 ],
             ),
             (
-                "Potential gains: revert every dev row where dist regressed (not deployable)",
+                "Potential gains: revert every dev row where dist_155K regressed (not deployable)",
                 [
                     ("QWK", qwk_d, qwk_ceiling, True, True),
                 ],
@@ -494,7 +494,7 @@ def render_qwk_contribution_insight(
         bullets=[
             "**The decomposition matches the catastrophic shift story from above.** "
             f"The deepest red is at **L{deepest_loss_level}**; the worst net penalty "
-            f"is at **L{worst_level}**. Both are levels where dist often predicts far "
+            f"is at **L{worst_level}**. Both are levels where dist_155K often predicts far "
             "from gold. The |err| ≥ 7 table repeats the same pattern: "
             f"**{n_high_low}** rows with gold **L12-L15** as **L2-L3**, "
             f"**{n_high_to_5}** with gold **L12-L16** as **L5**, and "
@@ -511,7 +511,7 @@ def render_qwk_contribution_insight(
             "even where per-level green components improve.",
             "**Counterfactual bound on recoverable QWK.** "
             "The potential-gains row (revert every regressed row) "
-            f"attains **{100.0 * qwk_ceiling:.2f}%** QWK (**{dqwk_ceiling:+.2f}** vs dist, "
+            f"attains **{100.0 * qwk_ceiling:.2f}%** QWK (**{dqwk_ceiling:+.2f}** vs dist_155K, "
             f"**{dqwk_actual:+.2f}** today). Full correction is unrealistic, but the "
             "bound indicates that partial reduction of regression mass, distribution "
             "control, length-aligned pseudo-labels, and ultra-short fragment filters, "
@@ -526,7 +526,7 @@ def render_qwk_contribution_insight(
 
 
 def render_far_off_mistakes_insight(stats: dict[str, Any]) -> None:
-    """Insight under the table of |err| ≥ 7 dist mistakes vs baseline."""
+    """Insight under the table of |err| ≥ 7 dist_155K mistakes vs baseline."""
     n = int(stats["n_extra"])
     already_wrong = n - int(stats["baseline_exact"])
     short = int(stats["short_under_50_chars"])

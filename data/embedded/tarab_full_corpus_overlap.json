@@ -1,0 +1,34 @@
+{
+  "tarab_sentences": 2029391,
+  "corpus_stats": {
+    "barec_word_types": 110962,
+    "tarab_word_types": 680032,
+    "shared_word_types": 72384,
+    "tarab_oov": 607648,
+    "tarab_not_in_barec": 607648,
+    "tarab_in_barec": 72384,
+    "tarab_oov_rate": 0.8935579502141076,
+    "tarab_in_barec_rate": 0.10644204978589243,
+    "barec_oov": 38578,
+    "barec_not_in_tarab": 38578,
+    "barec_in_tarab": 72384,
+    "barec_oov_rate": 0.3476685712225807,
+    "barec_in_tarab_rate": 0.6523314287774193,
+    "barec_coverage_rate": 0.6523314287774193,
+    "tarab_coverage_rate": 0.10644204978589243
+  },
+  "barec_meta": {
+    "total_records": 69441,
+    "unique_sentence_texts": 65477,
+    "per_split_records": {
+      "train": 54845,
+      "dev": 7310,
+      "test": 7286
+    }
+  },
+  "splits_loaded": [
+    "train",
+    "dev",
+    "test"
+  ]
+}

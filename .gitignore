@@ -1,5 +1,8 @@
 .streamlit/secrets.toml
 
+# Full Tarab corpus (~400MB); use data/embedded/tarab_full_corpus_overlap.json instead
+data/tarab_full.sentence_aldi_ags_readability.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

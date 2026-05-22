@@ -1302,12 +1302,6 @@ def _render_one_comparison(
         "Bars: predicted mix at best-QWK checkpoint."
     )
 
-    from tarab_model_experimentation.presentation_insights import (
-        render_shift_vs_confidence_insight,
-    )
-
-    render_shift_vs_confidence_insight()
-
     fig2 = _plot_per_class_accuracy_comparison(loaded, compare_labels)
     st.pyplot(fig2, clear_figure=True)
     plt.close(fig2)
@@ -1317,6 +1311,12 @@ def _render_one_comparison(
     )
 
     _render_per_class_recall_precision_table(loaded, compare_labels)
+
+    from tarab_model_experimentation.presentation_insights import (
+        render_shift_vs_confidence_insight,
+    )
+
+    render_shift_vs_confidence_insight()
 
     _render_distillation_confidence_bubbles(loaded, compare_labels)
 

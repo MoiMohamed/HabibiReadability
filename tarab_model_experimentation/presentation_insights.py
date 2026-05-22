@@ -378,7 +378,7 @@ def render_training_variant_overview_insight() -> None:
 
 
 def render_shift_vs_confidence_insight() -> None:
-    """After the predicted-class-distribution chart in the prediction analysis."""
+    """After the per-class recall & precision panel in the prediction analysis."""
     render_insight_card(
         tag="Insight",
         title="Pseudo-labeling shifts predictions toward gold, but recall drops",
@@ -543,8 +543,7 @@ def render_far_off_mistakes_insight(stats: dict[str, Any]) -> None:
         bullets=[
             "These rows are mostly **decontextualized fragments** (titles, single words, "
             "bylines, short pedagogical phrases) and **structured markup** (e.g. Wikipedia "
-            "`== … ==` headers): text where the gold label comes from the parent document, "
-            "not the snippet itself.",
+            "`== … ==` headers).",
             f"Baseline was already wrong on **{already_wrong} of {n}** (mean |err| "
             f"~{mean_base:.1f}); dist_155K pushes the same cases to ~{mean_dist:.1f}. "
             "Distillation rarely invents failures from scratch: it amplifies the boundary "

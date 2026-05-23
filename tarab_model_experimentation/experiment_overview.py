@@ -177,7 +177,6 @@ These follow from size and distribution; we chart them to describe each mix:
 1. **Randomly sample** BAREC train rows at *k* — up to **T** rows. If BAREC has more than **T** at *k*
    (e.g. ~11k at level 12 when **T** = 3k), subsample BAREC to **T** and stop.
 2. If count < **T**, top up with Tarab pseudo at *k* using the confidence bands until **T** or Tarab runs out.
-3. If Tarab has no rows at *k*, keep whatever BAREC sample we have.
 """
     )
     st.caption(

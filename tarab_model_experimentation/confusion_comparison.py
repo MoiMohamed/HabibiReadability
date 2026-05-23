@@ -585,7 +585,7 @@ def _render_distillation_confidence_bubbles(
     st.markdown("**Distillation: confidence, support & Δ precision**")
     st.caption(
         "Bubble size = dev gold count per level. Green = precision gain, red = loss. "
-        "All 19 levels shown (not cherry-picked extremes)."
+        "All 19 levels shown."
     )
 
     fig1 = _plot_confidence_vs_delta_precision_bubble(df)

@@ -416,7 +416,7 @@ def render_shift_vs_confidence_insight() -> None:
         ],
         next_step=(
             "**distribution control**, not confidence bands — cap per-class mass "
-            "or rebalance attractors (see below)."
+            "or rebalance attractors."
         ),
     )
 

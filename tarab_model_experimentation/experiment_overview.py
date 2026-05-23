@@ -41,7 +41,12 @@ def _match_distribution_table(stats: list[dict[str, Any]]) -> list[dict[str, Any
         r"barec_tarab_(?P<mult>0\.5X|1X|2X|4X)_55k_match_distribution_(?P<nominal>\d+)k",
         re.I,
     )
-    mult_label = {"0.5X": "0.5× BAREC", "1X": "1× BAREC", "2X": "2× BAREC", "4X": "4× BAREC"}
+    mult_label = {
+        "0.5X": "Tarab quota 0.5× BAREC size",
+        "1X": "Tarab quota 1× BAREC size",
+        "2X": "Tarab quota 2× BAREC size",
+        "4X": "Tarab quota 4× BAREC size",
+    }
     out: list[dict[str, Any]] = []
     for row in stats:
         m = pattern.search(row["file"])
@@ -60,7 +65,12 @@ def _match_distribution_table(stats: list[dict[str, Any]]) -> list[dict[str, Any
                 "Tarab pseudo": f"{row['tarab']:,}",
             }
         )
-    order = {"0.5× BAREC": 0, "1× BAREC": 1, "2× BAREC": 2, "4× BAREC": 3}
+    order = {
+        "Tarab quota 0.5× BAREC size": 0,
+        "Tarab quota 1× BAREC size": 1,
+        "Tarab quota 2× BAREC size": 2,
+        "Tarab quota 4× BAREC size": 3,
+    }
     out.sort(key=lambda r: order.get(r["Experiment"], 99))
     return out
 
@@ -141,14 +151,17 @@ These follow from size and distribution; we chart them to describe each mix:
         """
 **Filling procedure (match):** at each class *k*:
 
-1. Take **every** BAREC train row at *k*.
-2. Set a Tarab quota at *k* so BAREC+Tarab keeps BAREC’s label histogram, scaled by 0.5× / 1× / 2× / 4×.
+1. Keep **every** BAREC train row at *k* (~55k rows total; BAREC is never subsampled).
+2. Set a **Tarab-only quota** at *k* so the combined mix keeps BAREC’s label histogram. The quota
+   size is a multiple of how many BAREC rows exist at *k*: **0.5×** ≈ add half as many Tarab rows
+   as BAREC (overall ~27k Tarab), **1×** ≈ one Tarab row per BAREC row (~55k Tarab), **2×** / **4×**
+   = two or four times as much Tarab as BAREC (~110k / ~220k Tarab).
 3. Top up with Tarab pseudo at *k* using the confidence bands until the quota is met or Tarab runs out.
 """
     )
     st.caption(
-        "All ~54.8k BAREC train rows kept across the run. Tarab volume scales with BAREC size "
-        "(0.5×, 1×, 2×, 4×)."
+        "The multiplier applies to **extra Tarab pseudo-labels only**, not to BAREC. "
+        "0.5× does **not** mean “half the training set”; it means “add 50% as many Tarab rows as BAREC rows.”"
     )
     match_rows = _match_distribution_table(stats)
     if match_rows:

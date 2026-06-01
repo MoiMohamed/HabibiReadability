@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import streamlit as st
 
-from tarab_model_experimentation.constants import LOGS_DIR
+from tarab_model_experimentation.constants import LENGTH_MATCHED_DIR, LOGS_DIR, MIN_L_DIR
 
 # Retired / hidden .out logs (not shown in dashboards).
 _DEPRECATED_LOG_FILES: frozenset[str] = frozenset(
@@ -13,6 +13,7 @@ _DEPRECATED_LOG_FILES: frozenset[str] = frozenset(
         "habibi-readability-arabertv02-baseline-14943095.out",
         "barec_tarab_2X_55k_match_distribution_155k-14978447.out",
         "barec_tarab_2X_55k_match_distribution_155k_wo_pseudolabel19-15656421.out",
+        "barec_tarab_2x_minL8-15943060.out",
     }
 )
 
@@ -20,6 +21,8 @@ _DEPRECATED_LOG_FILES: frozenset[str] = frozenset(
 _PREFERRED_LOG_FILE: dict[str, str] = {
     "baseline": "habibi-readability-arabertv02-baseline-15686675.out",
     "dist_155K": "barec_tarab_2X_55k_match_distribution_155k-15686677.out",
+    "length_matched": "caps10_length_matching-15852637.out",
+    "minL8": "barec_tarab_2x_minL8-15943060.out",
 }
 
 # Retired split CSVs (duplicate chart labels — not used on dashboards).
@@ -55,6 +58,12 @@ def experiment_chart_label(fname: str) -> str:
     if "baseline" in stem:
         return "baseline"
 
+    if "length_matching" in stem or "length_matched" in stem:
+        return "length_matched"
+
+    if "minl8" in stem or "min_l8" in stem:
+        return "minL8"
+
     uniform_match = re.search(r"uniform_(\d+)k_per_class", stem)
     if uniform_match:
         return f"uni_{uniform_match.group(1)}K"
@@ -79,6 +88,8 @@ def experiment_chart_sort_key(label: str) -> tuple[int, int | str]:
     dist_match = re.match(r"dist_(\d+)K", label)
     if dist_match:
         return (0, int(dist_match.group(1)))
+    if label == "length_matched":
+        return (0, 300)
     uni_match = re.match(r"uni_(\d+)K", label)
     if uni_match:
         return (1, int(uni_match.group(1)))
@@ -86,13 +97,47 @@ def experiment_chart_sort_key(label: str) -> tuple[int, int | str]:
 
 
 def list_experiment_log_files() -> list[str]:
-    if not LOGS_DIR.exists():
-        return []
-    return sorted(
-        p.name
-        for p in LOGS_DIR.glob("*.out")
-        if p.name not in _DEPRECATED_LOG_FILES
-    )
+    names: list[str] = []
+    for directory in (LOGS_DIR, LENGTH_MATCHED_DIR, MIN_L_DIR):
+        if not directory.exists():
+            continue
+        names.extend(
+            p.name
+            for p in directory.glob("*.out")
+            if p.name not in _DEPRECATED_LOG_FILES
+        )
+    return sorted(dict.fromkeys(names))
+
+
+_MAIN_TAB_HIDDEN_LABELS: frozenset[str] = frozenset({"length_matched"})
+
+
+def list_model_experimentation_log_files() -> list[str]:
+    """Logs for the Model experimentation tab (excludes length-matched runs)."""
+    return [
+        f
+        for f in list_experiment_log_files()
+        if experiment_chart_label(f) not in _MAIN_TAB_HIDDEN_LABELS
+    ]
+
+
+def list_performance_profile_log_files() -> list[str]:
+    """All main-tab dist/uni/baseline runs plus length-matched for overview profile charts."""
+    hidden = _MAIN_TAB_HIDDEN_LABELS - {"length_matched"}
+    return [
+        f
+        for f in list_experiment_log_files()
+        if experiment_chart_label(f) not in hidden
+    ]
+
+
+def resolve_training_log_path(log_filename: str):
+    """Resolve a log file under ``data/logs``, ``data/length_matched``, or ``data/minL``."""
+    for directory in (LOGS_DIR, LENGTH_MATCHED_DIR, MIN_L_DIR):
+        path = directory / log_filename
+        if path.exists():
+            return path
+    return LOGS_DIR / log_filename
 
 
 def resolve_split_csv_for_chart_label(label: str, candidates: list[str]) -> str:

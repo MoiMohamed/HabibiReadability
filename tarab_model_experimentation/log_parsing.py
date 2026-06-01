@@ -5,7 +5,7 @@ import re
 
 import streamlit as st
 
-from tarab_model_experimentation.constants import LOGS_DIR
+from tarab_model_experimentation.selection import resolve_training_log_path
 
 
 def parse_classification_report_block(lines: list[str], header_idx: int):
@@ -103,7 +103,7 @@ def parse_confusion_matrix_block(lines: list[str], matrix_start_idx: int):
 
 @st.cache_data(show_spinner=False)
 def parse_training_log(log_filename: str):
-    txt = (LOGS_DIR / log_filename).read_text(encoding="utf-8", errors="ignore")
+    txt = resolve_training_log_path(log_filename).read_text(encoding="utf-8", errors="ignore")
     lines = txt.splitlines()
 
     model_match = re.search(r"model:\s*([^,]+),\s*levels:", txt)

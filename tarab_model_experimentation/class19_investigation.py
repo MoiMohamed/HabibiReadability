@@ -9,13 +9,23 @@ import streamlit as st
 from tarab_model_experimentation.confusion_comparison import (
     best_qwk_epoch_from_log,
     log_file_for_chart_label,
+    _color_for_label,
 )
-from tarab_model_experimentation.constants import DATA_DIR, DIST_ORANGE, SPLITS_DIR, TARAB_SHARE_COLOR
+from tarab_model_experimentation.constants import (
+    DATA_DIR,
+    DIST_ORANGE,
+    MIN_L8_TRAINING_LOG,
+    SPLITS_DIR,
+    TARAB_SHARE_COLOR,
+)
 from tarab_model_experimentation.metrics import one_based_confusion_matrix
 from tarab_model_experimentation.training_split import load_barec_train_readability_counts
 
 BASELINE_PRETRAIN_CSV = DATA_DIR / "readability_strat_barec_train_aldi_ags.csv"
 DIST_155K_SPLIT_CSV = SPLITS_DIR / "barec_tarab_2X_55k_match_distribution_155k.csv"
+MIN_L8_SPLIT_CSV = SPLITS_DIR / "barec_tarab_2X_55k_match_distribution_155k_minL8.csv"
+LENGTH_MATCHING_SPLIT_CSV = SPLITS_DIR / "barec_tarab_length_matching_train.csv"
+MIN_L8_MIN_LEVEL = 8
 # DIST_155K_WO_SPLIT_CSV = SPLITS_DIR / "barec_tarab_2X_55k_match_distribution_155k_wo_class19.csv"
 LEVELS = list(range(1, 20))
 CLASS_19 = 19
@@ -69,8 +79,10 @@ def _load_split_pretrain_df(split_csv: str, *, _schema_version: int = 2):
     path = Path(split_csv)
     if not path.exists():
         return None
-    usecols = ["Sentence", "Readability", "source"]
     cols = list(pd.read_csv(path, nrows=0, encoding="utf-8").columns)
+    usecols = ["Sentence", "Readability"]
+    if "source" in cols:
+        usecols.append("source")
     optional = [
         c
         for c in (
@@ -96,7 +108,18 @@ def _load_split_pretrain_df(split_csv: str, *, _schema_version: int = 2):
     out = out.dropna(subset=["label", "Sentence"]).copy()
     out["label"] = out["label"].astype(int)
     out = out[(out["label"] >= 1) & (out["label"] <= 19)].copy()
-    out["source"] = out["source"].astype(str).str.strip().str.lower()
+    if "source" in out.columns:
+        out["source"] = out["source"].astype(str).str.strip().str.lower()
+    else:
+        baseline_df = _load_baseline_pretrain_df()
+        if baseline_df is None:
+            return None
+        barec_sentences = set(baseline_df["Sentence"].astype(str))
+        out["source"] = np.where(
+            out["Sentence"].astype(str).isin(barec_sentences),
+            "barec",
+            "tarab",
+        )
     if "readability_confidence" in out.columns:
         out["readability_confidence"] = pd.to_numeric(
             out["readability_confidence"], errors="coerce"
@@ -109,6 +132,22 @@ def _load_split_pretrain_df(split_csv: str, *, _schema_version: int = 2):
                 out.loc[tarab_mask, "type"].astype(str).str.strip().str.lower()
             )
     return out
+
+
+@st.cache_data(show_spinner=False)
+def _load_minL8_pretrain_df(*, _schema_version: int = 1):
+    """dist_155K with Tarab pseudo-labels restricted to readability >= L8."""
+    import pandas as pd
+
+    if MIN_L8_SPLIT_CSV.exists():
+        return _load_split_pretrain_df(str(MIN_L8_SPLIT_CSV))
+
+    dist_df = _load_split_pretrain_df(str(DIST_155K_SPLIT_CSV))
+    if dist_df is None:
+        return None
+    barec = dist_df[dist_df["source"] == "barec"]
+    tarab = dist_df[(dist_df["source"] == "tarab") & (dist_df["label"] >= MIN_L8_MIN_LEVEL)]
+    return pd.concat([barec, tarab], ignore_index=True)
 
 
 def _label_distribution(df) -> "pd.Series":
@@ -172,7 +211,9 @@ def _tarab_confidence_stats_by_level(df) -> "pd.DataFrame":
     ).reindex(LEVELS)
 
 
-def build_pretraining_label_counts_table(baseline_df, dist_df) -> "pd.DataFrame":
+def build_pretraining_label_counts_table(
+    baseline_df, dist_df, *, dist_key: str = "dist_155K"
+) -> "pd.DataFrame":
     import pandas as pd
 
     baseline_counts = _label_distribution(baseline_df)
@@ -181,8 +222,8 @@ def build_pretraining_label_counts_table(baseline_df, dist_df) -> "pd.DataFrame"
     return pd.DataFrame(
         {
             "baseline_count": baseline_counts.values,
-            "dist_155K_count": dist_counts.values,
-            "dist_155K_tarab_count": dist_tarab_counts.values,
+            f"{dist_key}_count": dist_counts.values,
+            f"{dist_key}_tarab_count": dist_tarab_counts.values,
         },
         index=pd.Index(LEVELS, name="readability_level"),
     )
@@ -193,10 +234,13 @@ def build_pretraining_confidence_table(dist_df) -> "pd.DataFrame":
     return (conf_stats * 100.0).round(2).add_prefix("tarab_conf_")
 
 
-def _plot_pretraining_distributions(baseline_df, dist_df, *, dist_name: str):
+def _plot_pretraining_distributions(
+    baseline_df, dist_df, *, dist_name: str, dist_color: str | None = None
+):
     import matplotlib.pyplot as plt
     import numpy as np
 
+    mix_color = dist_color or _DIST_COLOR
     dist_counts = _label_distribution(dist_df)
     tarab_counts = _label_distribution(dist_df[dist_df["source"] == "tarab"])
     tarab_share = np.where(
@@ -207,7 +251,7 @@ def _plot_pretraining_distributions(baseline_df, dist_df, *, dist_name: str):
 
     datasets = [
         ("baseline (BAREC only)", baseline_df, _BASELINE_COLOR),
-        (f"{dist_name} (BAREC + Tarab)", dist_df, _DIST_COLOR),
+        (f"{dist_name} (BAREC + Tarab)", dist_df, mix_color),
     ]
     x = np.arange(len(LEVELS))
     edge = {"edgecolor": "white", "linewidth": 0.3}
@@ -236,7 +280,7 @@ def _plot_pretraining_distributions(baseline_df, dist_df, *, dist_name: str):
         edgecolor="white",
         linewidth=0.35,
     )
-    ax_tarab.set_ylabel("Tarab share\nof dist (%)")
+    ax_tarab.set_ylabel(f"Tarab share\nof {dist_name} (%)")
     ax_tarab.set_xlabel("Readability level")
     ax_tarab.set_ylim(0, 100)
     ax_tarab.set_xticks(x)
@@ -329,6 +373,45 @@ def _prepare_sentence_length_columns(df):
     return out
 
 
+def _compute_shared_text_metric_ylim(
+    dist_df,
+    metric: str,
+    *,
+    sources: tuple[str, ...] = ("barec", "tarab"),
+    whisker_percentiles: tuple[float, float] = (5, 95),
+    ylim_percentiles: tuple[float, float] = (2, 98),
+) -> tuple[float, float] | None:
+    """Shared y-limits for BAREC + Tarab boxplots of the same metric (same zoom)."""
+    subset = dist_df[dist_df["source"].isin(sources)].dropna(subset=[metric])
+    if subset.empty:
+        return None
+    flat = subset[metric].to_numpy(dtype=float)
+    if len(flat) == 0:
+        return None
+
+    hi = float(np.percentile(flat, ylim_percentiles[1]))
+    whisker_lows: list[float] = []
+    for lev in LEVELS:
+        for source in sources:
+            vals = subset.loc[
+                (subset["label"] == lev) & (subset["source"] == source), metric
+            ].to_numpy(dtype=float)
+            if len(vals) >= 2:
+                whisker_lows.append(float(np.percentile(vals, whisker_percentiles[0])))
+            elif len(vals) == 1:
+                whisker_lows.append(float(vals[0]))
+
+    y_min = (
+        min(whisker_lows)
+        if whisker_lows
+        else float(np.percentile(flat, ylim_percentiles[0]))
+    )
+    y_max = hi
+    span = y_max - y_min if y_max > y_min else 1.0
+    pad = max(0.5, 0.1 * span)
+    return max(0.0, y_min - pad), y_max + pad
+
+
 def _plot_text_metric_boxplot_by_level(
     dist_df,
     *,
@@ -339,6 +422,7 @@ def _plot_text_metric_boxplot_by_level(
     facecolor: str,
     whisker_percentiles: tuple[float, float] = (5, 95),
     ylim_percentiles: tuple[float, float] = (2, 98),
+    ylim: tuple[float, float] | None = None,
 ):
     """Boxplot of ``metric`` per level; y-axis zoomed, outliers hidden."""
     import matplotlib.pyplot as plt
@@ -381,7 +465,10 @@ def _plot_text_metric_boxplot_by_level(
     ax.set_xticklabels([str(lev) for lev in LEVELS], fontsize=9)
     ax.set_xlabel("Readability level", fontsize=10)
     ax.set_ylabel(metric_label, fontsize=10)
-    if flat is not None and len(flat):
+    ax.set_xlim(-0.5, len(LEVELS) - 0.5)
+    if ylim is not None:
+        ax.set_ylim(ylim[0], ylim[1])
+    elif flat is not None and len(flat):
         hi = float(np.percentile(flat, ylim_percentiles[1]))
         whisker_lows: list[float] = []
         for d in box_data:
@@ -545,7 +632,6 @@ def _plot_dev_predictions_when_true_19(
 
     fig, ax = plt.subplots(figsize=(12, 4.5))
     any_data = False
-    colors = {"baseline": "#1f77b4", "dist_155K": DIST_ORANGE}  # , "dist_155K_wo_19": "#2ca02c"
 
     for label in compare_labels:
         log_file = log_file_for_chart_label(log_files, label)
@@ -567,7 +653,7 @@ def _plot_dev_predictions_when_true_19(
             marker="o",
             linestyle="-",
             linewidth=1.5,
-            color=colors.get(label, "#9467bd"),
+            color=_color_for_label(label),
             label=f"{label} (epoch {epoch['epoch']:.0f})",
         )
 
@@ -678,49 +764,68 @@ def _render_one_class19_block(
     return True
 
 
-def render_pretraining_label_distribution_section() -> None:
-    """Baseline vs dist_155K label counts in training splits (before prediction analysis)."""
+def render_pretraining_label_distribution_section(
+    *,
+    split_csv: Path | str | None = None,
+    dist_display_name: str = "dist_155K",
+    dist_key: str | None = None,
+) -> None:
+    """Baseline vs mixed split label counts (baseline BAREC vs BAREC + Tarab)."""
     import matplotlib.pyplot as plt
 
+    split_csv = split_csv or DIST_155K_SPLIT_CSV
+    dist_key = dist_key or dist_display_name.replace("-", "_")
+    split_path = Path(split_csv)
+
     baseline_df = _load_baseline_pretrain_df()
-    dist_df = _load_split_pretrain_df(str(DIST_155K_SPLIT_CSV))
+    dist_df = _load_split_pretrain_df(str(split_path))
     if baseline_df is None or dist_df is None:
         st.warning(
             "Missing training CSVs for label distribution chart. "
-            f"Need `{BASELINE_PRETRAIN_CSV.name}` and `{DIST_155K_SPLIT_CSV.name}`."
+            f"Need `{BASELINE_PRETRAIN_CSV.name}` and `{split_path.name}`."
         )
         return
 
     st.markdown("### Training label distribution")
     st.caption(
-        "Top: raw counts — baseline (blue) vs dist_155K (orange). "
-        "Bottom: Tarab share of dist_155K per level."
+        f"Top: raw counts — baseline (blue) vs {dist_display_name} (orange). "
+        f"Bottom: Tarab share of {dist_display_name} per level."
     )
-    fig = _plot_pretraining_distributions(baseline_df, dist_df, dist_name="dist_155K")
+    fig = _plot_pretraining_distributions(
+        baseline_df, dist_df, dist_name=dist_display_name
+    )
     st.pyplot(fig, clear_figure=True)
     plt.close(fig)
 
     with st.expander("Numeric tables (label counts)"):
         st.dataframe(
-            build_pretraining_label_counts_table(baseline_df, dist_df),
+            build_pretraining_label_counts_table(
+                baseline_df, dist_df, dist_key=dist_key
+            ),
             width="stretch",
         )
 
 
-def render_dist_155k_confidence_distribution_section() -> None:
-    """Tarab pseudo-label confidence by readability level (dist_155K training split)."""
+def render_training_confidence_distribution_section(
+    *,
+    split_csv: Path | str,
+    dist_display_name: str,
+) -> None:
+    """Tarab pseudo-label confidence by readability level for a training split."""
     import matplotlib.pyplot as plt
 
-    dist_df = _load_split_pretrain_df(str(DIST_155K_SPLIT_CSV))
+    split_path = Path(split_csv)
+    dist_df = _load_split_pretrain_df(str(split_path))
     if dist_df is None:
         st.warning(
-            "Missing dist_155K training CSV for confidence chart. "
-            f"Need `{DIST_155K_SPLIT_CSV.name}`."
+            f"Missing training CSV for confidence chart. Need `{split_path.name}`."
         )
         return
 
     st.markdown("#### Confidence distribution per class")
-    conf_fig = _plot_tarab_confidence_boxplot_by_level(dist_df, dist_name="dist_155K")
+    conf_fig = _plot_tarab_confidence_boxplot_by_level(
+        dist_df, dist_name=dist_display_name
+    )
     if conf_fig is not None:
         st.pyplot(conf_fig, clear_figure=True)
         plt.close(conf_fig)
@@ -732,7 +837,16 @@ def render_dist_155k_confidence_distribution_section() -> None:
             st.caption("Stats are **0–100** (×100 from raw score), Tarab rows only.")
             st.dataframe(build_pretraining_confidence_table(dist_df), width="stretch")
     else:
-        st.info("No Tarab `readability_confidence` values in the dist_155K split.")
+        st.info(
+            f"No Tarab `readability_confidence` values in the {dist_display_name} split."
+        )
+
+
+def render_dist_155k_confidence_distribution_section() -> None:
+    render_training_confidence_distribution_section(
+        split_csv=DIST_155K_SPLIT_CSV,
+        dist_display_name="dist_155K",
+    )
 
 
 def _show_text_length_boxplot(
@@ -745,6 +859,7 @@ def _show_text_length_boxplot(
     dist_name: str,
     facecolor: str,
     empty_msg: str,
+    ylim: tuple[float, float] | None = None,
 ) -> None:
     import matplotlib.pyplot as plt
 
@@ -757,6 +872,7 @@ def _show_text_length_boxplot(
                 metric_label=metric_label,
                 dist_name=dist_name,
                 facecolor=facecolor,
+                ylim=ylim,
             )
         except Exception as exc:
             st.error(f"Could not draw {source} {metric}: {exc}")
@@ -1418,7 +1534,7 @@ def _plot_barec_vocab_coverage_by_tarab_at_level(coverage_df):
     return fig
 
 
-def _plot_tarab_song_poem_by_level(tarab_df):
+def _plot_tarab_song_poem_by_level(tarab_df, *, split_display_name: str = "dist_155K"):
     """Stacked bar: % song vs % poem at each readability level (Tarab pseudo only)."""
     import matplotlib.pyplot as plt
     import numpy as np
@@ -1451,7 +1567,10 @@ def _plot_tarab_song_poem_by_level(tarab_df):
     ax.set_xlabel("Readability level", fontsize=10)
     ax.set_ylabel("% of Tarab pseudo rows at level", fontsize=10)
     ax.set_ylim(0, 100)
-    ax.set_title("Song vs poem by readability level (dist_155K Tarab pseudo)", fontsize=11)
+    ax.set_title(
+        f"Song vs poem by readability level ({split_display_name} Tarab pseudo)",
+        fontsize=11,
+    )
     ax.grid(True, axis="y", alpha=0.22)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(
@@ -1465,13 +1584,18 @@ def _plot_tarab_song_poem_by_level(tarab_df):
     return fig
 
 
-def render_dist_155k_song_poem_section() -> None:
+def render_training_song_poem_section(
+    *,
+    split_csv: Path | str,
+    split_display_name: str,
+) -> None:
     """Tarab pseudo song/poem totals and mix per readability level."""
     import matplotlib.pyplot as plt
 
-    split_df = _load_split_pretrain_df(str(DIST_155K_SPLIT_CSV))
+    split_path = Path(split_csv)
+    split_df = _load_split_pretrain_df(str(split_path))
     if split_df is None:
-        st.warning(f"Missing dist_155K split. Need `{DIST_155K_SPLIT_CSV.name}`.")
+        st.warning(f"Missing split. Need `{split_path.name}`.")
         return
 
     tarab = _tarab_rows_with_type(split_df)
@@ -1494,26 +1618,43 @@ def render_dist_155k_song_poem_section() -> None:
     c_poem.metric("Poem", f"{100.0 * poem_n / n_tarab:.1f}%", help=f"{poem_n:,} / {n_tarab:,} rows")
 
     st.markdown("**By readability level**")
-    fig = _plot_tarab_song_poem_by_level(tarab)
+    fig = _plot_tarab_song_poem_by_level(tarab, split_display_name=split_display_name)
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
+    st.caption(f"Tarab rows in `{split_path.name}` ({split_display_name}).")
 
 
-def render_dist_155k_text_length_section() -> None:
-    """Character length and word count boxplots by level (BAREC vs Tarab, dist_155K)."""
-    dist_df = _load_split_pretrain_df(str(DIST_155K_SPLIT_CSV))
+def render_dist_155k_song_poem_section() -> None:
+    render_training_song_poem_section(
+        split_csv=DIST_155K_SPLIT_CSV,
+        split_display_name="dist_155K",
+    )
+
+
+def render_training_text_length_section(
+    *,
+    split_csv: Path | str,
+    dist_display_name: str,
+    include_dist_insights: bool = False,
+) -> None:
+    """Character length and word count boxplots by level (BAREC vs Tarab)."""
+    split_path = Path(split_csv)
+    dist_df = _load_split_pretrain_df(str(split_path))
     if dist_df is None:
         st.warning(
-            f"Missing dist_155K split for length charts. Need `{DIST_155K_SPLIT_CSV.name}`."
+            f"Missing split for length charts. Need `{split_path.name}`."
         )
         return
 
     dist_df = _prepare_sentence_length_columns(dist_df)
-    dist_name = "dist_155K"
+    dist_name = dist_display_name
+    char_ylim = _compute_shared_text_metric_ylim(dist_df, "char_length")
+    word_ylim = _compute_shared_text_metric_ylim(dist_df, "word_count")
 
     st.markdown("### Text length by readability level")
     st.caption(
-        "**Characters** = length of `Sentence`; **words** = whitespace-separated token count."
+        "**Characters** = length of `Sentence`; **words** = whitespace-separated token count. "
+        "BAREC and Tarab panels share the same axis scale within each row."
     )
 
     st.markdown("#### Character length")
@@ -1527,6 +1668,7 @@ def render_dist_155k_text_length_section() -> None:
         dist_name=dist_name,
         facecolor=_BASELINE_COLOR,
         empty_msg="No BAREC rows for character length.",
+        ylim=char_ylim,
     )
     _show_text_length_boxplot(
         c_tarab,
@@ -1537,6 +1679,7 @@ def render_dist_155k_text_length_section() -> None:
         dist_name=dist_name,
         facecolor=TARAB_SHARE_COLOR,
         empty_msg="No Tarab rows for character length.",
+        ylim=char_ylim,
     )
 
     st.markdown("#### Word count")
@@ -1550,6 +1693,7 @@ def render_dist_155k_text_length_section() -> None:
         dist_name=dist_name,
         facecolor=_BASELINE_COLOR,
         empty_msg="No BAREC rows for word count.",
+        ylim=word_ylim,
     )
     _show_text_length_boxplot(
         w_tarab,
@@ -1560,20 +1704,271 @@ def render_dist_155k_text_length_section() -> None:
         dist_name=dist_name,
         facecolor=TARAB_SHARE_COLOR,
         empty_msg="No Tarab rows for word count.",
+        ylim=word_ylim,
     )
 
-    from tarab_model_experimentation.presentation_insights import (
-        render_text_length_insight,
+    if include_dist_insights:
+        from tarab_model_experimentation.presentation_insights import (
+            render_text_length_insight,
+            render_training_variant_overview_insight,
+        )
+
+        render_text_length_insight()
+        render_training_variant_overview_insight()
+        render_dist_155k_aldi_ags_heatmaps(dist_df)
+
+
+def render_dist_155k_text_length_section() -> None:
+    render_training_text_length_section(
+        split_csv=DIST_155K_SPLIT_CSV,
+        dist_display_name="dist_155K",
+        include_dist_insights=True,
     )
 
-    render_text_length_insight()
 
-    from tarab_model_experimentation.presentation_insights import (
-        render_training_variant_overview_insight,
+def render_dist_155k_training_data_overview_section() -> None:
+    """Label, confidence, length, and song/poem for the dist_155K training split."""
+    st.subheader("Training data overview")
+    render_pretraining_label_distribution_section()
+    render_dist_155k_confidence_distribution_section()
+    render_dist_155k_text_length_section()
+    render_dist_155k_song_poem_section()
+
+
+def render_minL8_training_blocks() -> None:
+    """Training diagnostics for dist_155K + Tarab pseudo-labels >= L8."""
+    minL_df = _load_minL8_pretrain_df()
+    if minL_df is None:
+        st.warning(
+            "Missing data for minL8 charts. Need "
+            f"`{DIST_155K_SPLIT_CSV.name}` or `{MIN_L8_SPLIT_CSV.name}`."
+        )
+        return
+
+    baseline_df = _load_baseline_pretrain_df()
+    if baseline_df is None:
+        st.warning(f"Missing baseline CSV `{BASELINE_PRETRAIN_CSV.name}`.")
+        return
+
+    import matplotlib.pyplot as plt
+
+    st.markdown("### Training label distribution")
+    st.caption(
+        "Top: baseline (blue) vs minL8 (purple) — 2× dist_155K Tarab quota, "
+        f"Tarab rows with pseudo-label ≥ {MIN_L8_MIN_LEVEL} only. "
+        "Bottom: Tarab share of minL8 per level."
+    )
+    fig = _plot_pretraining_distributions(
+        baseline_df, minL_df, dist_name="minL8", dist_color="#9467bd"
+    )
+    st.pyplot(fig, clear_figure=True)
+    plt.close(fig)
+
+    with st.expander("Numeric tables (label counts)"):
+        st.dataframe(
+            build_pretraining_label_counts_table(
+                baseline_df, minL_df, dist_key="minL8"
+            ),
+            width="stretch",
+        )
+
+    st.markdown("#### Confidence distribution per class")
+    conf_fig = _plot_tarab_confidence_boxplot_by_level(minL_df, dist_name="minL8")
+    if conf_fig is not None:
+        st.pyplot(conf_fig, clear_figure=True)
+        plt.close(conf_fig)
+        st.caption(
+            "Tarab pseudo-label confidence (0–100) per level; y-axis zoomed to data range. "
+            "Box = q1–q3, black line = median, whiskers = min/max."
+        )
+        with st.expander("Numeric tables (confidence per class)"):
+            st.caption("Stats are **0–100** (×100 from raw score), Tarab rows only.")
+            st.dataframe(build_pretraining_confidence_table(minL_df), width="stretch")
+    else:
+        st.info("No Tarab `readability_confidence` values in the minL8 split.")
+
+    minL_prepared = _prepare_sentence_length_columns(minL_df)
+    char_ylim = _compute_shared_text_metric_ylim(minL_prepared, "char_length")
+    word_ylim = _compute_shared_text_metric_ylim(minL_prepared, "word_count")
+
+    st.markdown("### Text length by readability level")
+    st.caption(
+        "**Characters** = length of `Sentence`; **words** = whitespace-separated token count. "
+        "BAREC and Tarab panels share the same axis scale within each row."
     )
 
-    render_training_variant_overview_insight()
-    render_dist_155k_aldi_ags_heatmaps(dist_df)
+    st.markdown("#### Character length")
+    c_barec, c_tarab = st.columns(2)
+    _show_text_length_boxplot(
+        c_barec,
+        minL_prepared,
+        source="barec",
+        metric="char_length",
+        metric_label="Characters per sentence",
+        dist_name="minL8",
+        facecolor=_BASELINE_COLOR,
+        empty_msg="No BAREC rows for character length.",
+        ylim=char_ylim,
+    )
+    _show_text_length_boxplot(
+        c_tarab,
+        minL_prepared,
+        source="tarab",
+        metric="char_length",
+        metric_label="Characters per sentence",
+        dist_name="minL8",
+        facecolor=TARAB_SHARE_COLOR,
+        empty_msg="No Tarab rows for character length.",
+        ylim=char_ylim,
+    )
+
+    st.markdown("#### Word count")
+    w_barec, w_tarab = st.columns(2)
+    _show_text_length_boxplot(
+        w_barec,
+        minL_prepared,
+        source="barec",
+        metric="word_count",
+        metric_label="Words per sentence",
+        dist_name="minL8",
+        facecolor=_BASELINE_COLOR,
+        empty_msg="No BAREC rows for word count.",
+        ylim=word_ylim,
+    )
+    _show_text_length_boxplot(
+        w_tarab,
+        minL_prepared,
+        source="tarab",
+        metric="word_count",
+        metric_label="Words per sentence",
+        dist_name="minL8",
+        facecolor=TARAB_SHARE_COLOR,
+        empty_msg="No Tarab rows for word count.",
+        ylim=word_ylim,
+    )
+
+    st.markdown("### Tarab song vs poem")
+    tarab = _tarab_rows_with_type(minL_df)
+    if tarab is None:
+        st.warning("Tarab `type` (song/poem) not available for minL8 rows.")
+    else:
+        n_tarab = len(tarab)
+        counts = tarab["type"].value_counts()
+        song_n = int(counts.get("song", 0))
+        poem_n = int(counts.get("poem", 0))
+        st.markdown("**Overall (minL8 Tarab only)**")
+        c_song, c_poem = st.columns(2)
+        c_song.metric(
+            "Song", f"{100.0 * song_n / n_tarab:.1f}%", help=f"{song_n:,} / {n_tarab:,} rows"
+        )
+        c_poem.metric(
+            "Poem", f"{100.0 * poem_n / n_tarab:.1f}%", help=f"{poem_n:,} / {n_tarab:,} rows"
+        )
+        st.markdown("**By readability level**")
+        fig_sp = _plot_tarab_song_poem_by_level(tarab)
+        st.pyplot(fig_sp, use_container_width=True)
+        plt.close(fig_sp)
+
+
+def render_minL8_training_data_overview_section() -> None:
+    """Label, confidence, length, and song/poem for the minL8 train split."""
+    split_note = (
+        MIN_L8_SPLIT_CSV.name
+        if MIN_L8_SPLIT_CSV.exists()
+        else f"{DIST_155K_SPLIT_CSV.name} (Tarab pseudo-label ≥ {MIN_L8_MIN_LEVEL})"
+    )
+    st.markdown("### Training data overview")
+    st.caption(
+        f"2× dist_155K Tarab quota, pseudo-labels ≥ {MIN_L8_MIN_LEVEL} only (`{split_note}`)."
+    )
+    render_minL8_training_blocks()
+
+
+def render_length_matching_training_blocks(
+    *,
+    include_dist_insights: bool = False,
+) -> None:
+    """Training diagnostics for the length-matched split (shared by preview and full sections)."""
+    render_pretraining_label_distribution_section(
+        split_csv=LENGTH_MATCHING_SPLIT_CSV,
+        dist_display_name="length-matched",
+        dist_key="length_matching",
+    )
+    render_training_confidence_distribution_section(
+        split_csv=LENGTH_MATCHING_SPLIT_CSV,
+        dist_display_name="length-matched",
+    )
+    render_training_text_length_section(
+        split_csv=LENGTH_MATCHING_SPLIT_CSV,
+        dist_display_name="length-matched",
+        include_dist_insights=include_dist_insights,
+    )
+    render_training_song_poem_section(
+        split_csv=LENGTH_MATCHING_SPLIT_CSV,
+        split_display_name="length-matched",
+    )
+
+
+def render_length_matching_training_data_overview_section() -> None:
+    """Label, confidence, length, and song/poem for the length-matched train split."""
+    st.markdown("### Training data overview")
+    render_length_matching_training_blocks(include_dist_insights=False)
+
+
+def render_length_matching_full_analysis_section(*, log_files: list[str]) -> None:
+    """Training overview + dev prediction analysis + test metrics for length-matched."""
+    from tarab_model_experimentation.confusion_comparison import (
+        LENGTH_MATCHED_COMPARISON_SPEC,
+        _render_one_comparison,
+    )
+    from tarab_model_experimentation.test_results import (
+        render_length_matched_test_results_section,
+    )
+
+    st.divider()
+    st.header("Length-matched experiment")
+
+    render_length_matching_training_data_overview_section()
+
+    title, compare_labels = LENGTH_MATCHED_COMPARISON_SPEC
+    st.subheader("Prediction and error analysis (length-matched)")
+    _render_one_comparison(
+        log_files=log_files,
+        title=title,
+        compare_labels=compare_labels,
+        include_insights=False,
+    )
+
+    render_length_matched_test_results_section(log_files)
+
+
+def render_minL8_full_analysis_section(*, log_files: list[str]) -> None:
+    """Training overview + dev prediction analysis + test metrics for minL8."""
+    from tarab_model_experimentation.confusion_comparison import (
+        MIN_L8_COMPARISON_SPEC,
+        _render_one_comparison,
+    )
+    from tarab_model_experimentation.test_results import render_minL8_test_results_section
+
+    st.divider()
+    st.header("minL8 experiment")
+    st.caption(
+        f"2× dist_155K, Tarab pseudo-labels ≥ {MIN_L8_MIN_LEVEL} · "
+        f"train: `{MIN_L8_SPLIT_CSV.name}` (or filtered dist_155K) · "
+        f"log and dev export: `data/minL/`."
+    )
+
+    render_minL8_training_data_overview_section()
+
+    title, compare_labels = MIN_L8_COMPARISON_SPEC
+    st.subheader("Prediction and error analysis (minL8)")
+    _render_one_comparison(
+        log_files=log_files,
+        title=title,
+        compare_labels=compare_labels,
+    )
+
+    render_minL8_test_results_section(log_files)
 
 
 def render_class19_investigation_section(*, log_files: list[str]) -> None:

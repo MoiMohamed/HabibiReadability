@@ -22,8 +22,20 @@ from tarab_model_experimentation.selection import (
 _BASELINE_COLOR = "#1f77b4"
 _EXPERIMENT_COLORS = {
     "dist_155K": DIST_ORANGE,
+    "length_matched": DIST_ORANGE,
+    "minL8": "#9467bd",
     # "dist_155K_wo_19": "#2ca02c",
 }
+
+LENGTH_MATCHED_COMPARISON_SPEC: tuple[str, tuple[str, str]] = (
+    "Prediction analysis",
+    ("baseline", "length_matched"),
+)
+
+MIN_L8_COMPARISON_SPEC: tuple[str, tuple[str, str]] = (
+    "Prediction analysis",
+    ("baseline", "minL8"),
+)
 
 COMPARISON_SPECS: tuple[tuple[str, tuple[str, str]], ...] = (
     ("Prediction analysis", ("baseline", "dist_155K")),
@@ -261,6 +273,7 @@ def _plot_confusion_delta_heatmap(
     delta_df,
     *,
     title: str,
+    experiment_label: str = "dist_155K",
     figsize: tuple[float, float] = (10, 8.5),
 ):
     import matplotlib.pyplot as plt
@@ -295,7 +308,9 @@ def _plot_confusion_delta_heatmap(
             color = "white" if abs(v) > limit * 0.55 else "black"
             ax.text(c, r, f"{v:+d}", ha="center", va="center", fontsize=6, color=color)
 
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Δ count (dist_155K − baseline)")
+    fig.colorbar(
+        im, ax=ax, fraction=0.046, pad=0.04, label=f"Δ count ({experiment_label} − baseline)"
+    )
     fig.tight_layout()
     return fig
 
@@ -311,6 +326,7 @@ def _render_confusion_delta_heatmap(
     fig = _plot_confusion_delta_heatmap(
         delta_df,
         title=f"ΔC = {short_exp} − baseline (dev, best QWK)",
+        experiment_label=experiment_label,
     )
     st.pyplot(fig, clear_figure=True)
     plt.close(fig)
@@ -471,7 +487,7 @@ def _annotate_bubble_levels(ax, df, *, x_col: str, y_col: str) -> None:
         )
 
 
-def _plot_confidence_vs_delta_precision_bubble(df):
+def _plot_confidence_vs_delta_precision_bubble(df, *, experiment_label: str):
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -491,7 +507,7 @@ def _plot_confidence_vs_delta_precision_bubble(df):
     _pad_scatter_limits(ax, df, x_col="confidence_pct", y_col="delta_precision")
     ax.axhline(0, color="#888888", linewidth=0.7, linestyle="--", alpha=0.7)
     ax.set_xlabel("Median Tarab pseudo-label confidence (%)")
-    ax.set_ylabel("Δ precision (dist_155K − baseline)")
+    ax.set_ylabel(f"Δ precision ({experiment_label} − baseline)")
     ax.set_title("Confidence × support × precision change (all 19 levels)")
     ax.grid(True, alpha=0.2)
     ax.spines[["top", "right"]].set_visible(False)
@@ -511,7 +527,7 @@ def _dev_support_stats_line(df) -> tuple[float, str]:
     return med, stats_line
 
 
-def _plot_confidence_vs_delta_precision_faceted(df):
+def _plot_confidence_vs_delta_precision_faceted(df, *, experiment_label: str):
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -554,7 +570,7 @@ def _plot_confidence_vs_delta_precision_faceted(df):
         if rho is not None:
             _annotate_spearman_rho(ax, rho, n=len(part))
 
-    axes[0].set_ylabel("Δ precision (dist_155K − baseline)")
+    axes[0].set_ylabel(f"Δ precision ({experiment_label} − baseline)")
     fig.suptitle(
         f"Confidence vs Δ precision by dev support\n{stats_line}",
         y=1.04,
@@ -582,17 +598,19 @@ def _render_distillation_confidence_bubbles(
     if df is None:
         return
 
+    _, experiment_label = compare_labels
+
     st.markdown("**Distillation: confidence, support & Δ precision**")
     st.caption(
         "Bubble size = dev gold count per level. Green = precision gain, red = loss. "
         "All 19 levels shown."
     )
 
-    fig1 = _plot_confidence_vs_delta_precision_bubble(df)
+    fig1 = _plot_confidence_vs_delta_precision_bubble(df, experiment_label=experiment_label)
     st.pyplot(fig1, clear_figure=True)
     plt.close(fig1)
 
-    fig2 = _plot_confidence_vs_delta_precision_faceted(df)
+    fig2 = _plot_confidence_vs_delta_precision_faceted(df, experiment_label=experiment_label)
     st.pyplot(fig2, clear_figure=True)
     plt.close(fig2)
     _, stats_line = _dev_support_stats_line(df)
@@ -1003,7 +1021,7 @@ def _plot_mistake_rate_by_distance(
     return fig
 
 
-def _plot_per_class_gain_loss_bars(df):
+def _plot_per_class_gain_loss_bars(df, *, experiment_label: str):
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -1052,7 +1070,7 @@ def _plot_per_class_gain_loss_bars(df):
     ax.set_xlabel("Dev true readability level")
     ax.set_ylabel("Δ squared-error penalty (within true level)")
     ax.set_title(
-        "dist_155K vs baseline: row-level gains, losses, and net",
+        f"{experiment_label} vs baseline: row-level gains, losses, and net",
         fontsize=12,
         pad=12,
     )
@@ -1076,7 +1094,9 @@ def _plot_per_class_gain_loss_bars(df):
     return fig
 
 
-def _render_qwk_contribution_chart(compare_labels: tuple[str, str]) -> None:
+def _render_qwk_contribution_chart(
+    compare_labels: tuple[str, str], *, include_insights: bool = True
+) -> None:
     import matplotlib.pyplot as plt
 
     from tarab_model_experimentation.dev_predictions import build_per_class_gain_loss_vs_baseline
@@ -1110,15 +1130,22 @@ def _render_qwk_contribution_chart(compare_labels: tuple[str, str]) -> None:
         "ingredients of $\\Delta\\text{QWK}$. They decompose where the QWK gap is "
         "actually coming from."
     )
-    fig = _plot_per_class_gain_loss_bars(df)
+    fig = _plot_per_class_gain_loss_bars(df, experiment_label=dist_label)
     st.pyplot(fig, clear_figure=True)
     plt.close(fig)
 
-    from tarab_model_experimentation.presentation_insights import (
-        render_qwk_contribution_insight,
-    )
+    if include_insights:
+        from tarab_model_experimentation.presentation_insights import (
+            render_qwk_contribution_insight,
+        )
 
-    render_qwk_contribution_insight(df, summary, compare_labels)
+        render_qwk_contribution_insight(df, summary, compare_labels)
+    elif dist_label == "length_matched":
+        from tarab_model_experimentation.presentation_insights import (
+            render_length_matching_qwk_decomposition_insight,
+        )
+
+        render_length_matching_qwk_decomposition_insight()
 
 
 def _qwk_driver_narrative(loaded: dict[str, dict[str, Any]], compare_labels: tuple[str, str]) -> str:
@@ -1215,35 +1242,40 @@ def build_confusion_transition_deltas(
 
 
 def _render_far_off_mistakes_section(
-    loaded: dict[str, dict[str, Any]], compare_labels: tuple[str, str]
+    loaded: dict[str, dict[str, Any]],
+    compare_labels: tuple[str, str],
+    *,
+    include_insights: bool = True,
 ) -> None:
     from tarab_model_experimentation.dev_predictions import (
         build_far_off_mistake_examples_table,
         far_off_mistake_insight_stats,
     )
 
+    _, experiment_label = compare_labels
     st.markdown(
-        "#### Sanity Check: Far-off mistakes dist_155K adds vs baseline (|err| ≥ 7)"
+        f"#### Sanity Check: Far-off mistakes {experiment_label} adds vs baseline (|err| ≥ 7)"
     )
     examples, err = build_far_off_mistake_examples_table(loaded, compare_labels)
     if err:
         st.info(err)
     elif examples is not None and not examples.empty:
         st.caption(
-            f"{len(examples)} dev examples where **dist_155K** is ≥7 levels off and "
+            f"{len(examples)} dev examples where **{experiment_label}** is ≥7 levels off and "
             f"**baseline was less wrong**."
         )
         st.dataframe(examples, width="stretch", hide_index=True)
-        stats = far_off_mistake_insight_stats(compare_labels)
-        if stats:
-            from tarab_model_experimentation.presentation_insights import (
-                render_far_off_mistakes_insight,
-            )
+        if include_insights:
+            stats = far_off_mistake_insight_stats(compare_labels)
+            if stats:
+                from tarab_model_experimentation.presentation_insights import (
+                    render_far_off_mistakes_insight,
+                )
 
-            render_far_off_mistakes_insight(stats)
+                render_far_off_mistakes_insight(stats)
     else:
         st.caption(
-            "No extra far-off dist_155K mistakes vs baseline at the best-QWK checkpoints."
+            f"No extra far-off {experiment_label} mistakes vs baseline at the best-QWK checkpoints."
         )
 
 
@@ -1252,6 +1284,7 @@ def _render_qwk_shift_analysis(compare_labels: tuple[str, str]) -> None:
         build_per_class_qwk_penalty_contribution,
     )
 
+    _, experiment_label = compare_labels
     contrib, contrib_err = build_per_class_qwk_penalty_contribution(compare_labels)
     if contrib_err:
         st.info(contrib_err)
@@ -1261,11 +1294,11 @@ def _render_qwk_shift_analysis(compare_labels: tuple[str, str]) -> None:
             st.dataframe(
                 show.rename(
                     columns={
-                        "delta_penalty": "net (baseline − dist_155K)",
+                        "delta_penalty": f"net (baseline − {experiment_label})",
                         "gain_positive": "gain on rows",
                         "loss_negative": "loss on rows",
                         "penalty_baseline": "baseline penalty",
-                        "penalty_dist": "dist_155K penalty",
+                        "penalty_dist": f"{experiment_label} penalty",
                     }
                 ),
                 width="stretch",
@@ -1278,6 +1311,7 @@ def _render_one_comparison(
     log_files: list[str],
     title: str,
     compare_labels: tuple[str, str],
+    include_insights: bool = True,
 ) -> bool:
     import matplotlib.pyplot as plt
 
@@ -1317,18 +1351,20 @@ def _render_one_comparison(
 
     _render_per_class_recall_precision_table(loaded, compare_labels)
 
-    from tarab_model_experimentation.presentation_insights import (
-        render_shift_vs_confidence_insight,
-    )
+    if include_insights:
+        from tarab_model_experimentation.presentation_insights import (
+            render_shift_vs_confidence_insight,
+        )
 
-    render_shift_vs_confidence_insight()
+        render_shift_vs_confidence_insight()
 
     _render_distillation_confidence_bubbles(loaded, compare_labels)
 
+    _, experiment_label = compare_labels
     st.markdown("#### Distribution-shift error analysis")
     st.caption(
-        "ΔC migration, signed error, and far-off mistakes — where gold classes lost "
-        "recall to attractors after dist_155K."
+        f"ΔC migration, signed error, and far-off mistakes — where gold classes lost "
+        f"recall to attractors after {experiment_label}."
     )
 
     _render_confusion_delta_heatmap(loaded, compare_labels)
@@ -1342,14 +1378,17 @@ def _render_one_comparison(
         st.pyplot(fig_unsigned, clear_figure=True)
         plt.close(fig_unsigned)
 
-        from tarab_model_experimentation.presentation_insights import (
-            render_unsigned_error_bridge_insight,
-        )
+        if include_insights:
+            from tarab_model_experimentation.presentation_insights import (
+                render_unsigned_error_bridge_insight,
+            )
 
-        render_unsigned_error_bridge_insight()
+            render_unsigned_error_bridge_insight()
 
-    _render_far_off_mistakes_section(loaded, compare_labels)
-    _render_qwk_contribution_chart(compare_labels)
+    _render_far_off_mistakes_section(
+        loaded, compare_labels, include_insights=include_insights
+    )
+    _render_qwk_contribution_chart(compare_labels, include_insights=include_insights)
 
     _render_qwk_shift_analysis(compare_labels)
     return True

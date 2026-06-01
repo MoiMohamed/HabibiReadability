@@ -152,7 +152,7 @@ def build_profile_table_df(rows: list[dict[str, Any]], criterion: str):
 def _experiment_group(label: str) -> str:
     if label == "baseline":
         return "baseline"
-    if label.startswith("dist_"):
+    if label.startswith("dist_") or label == "length_matched":
         return "dist"
     if label.startswith("uni_"):
         return "uni"

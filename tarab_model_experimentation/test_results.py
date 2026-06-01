@@ -121,8 +121,13 @@ def render_test_results_section(
     st.dataframe(test_df, width="stretch", hide_index=True)
 
 
-def render_primary_test_results_section(log_files: list[str]) -> None:
-    """Test metrics for canonical baseline vs dist_155K (no experiment picker)."""
+def render_experiment_pair_test_results_section(
+    log_files: list[str],
+    *,
+    experiment_label: str,
+    experiment_display: str | None = None,
+) -> None:
+    """Test metrics for baseline vs a canonical experiment label."""
     from tarab_model_experimentation.log_parsing import parse_training_log
     from tarab_model_experimentation.selection import (
         log_display_name,
@@ -130,9 +135,12 @@ def render_primary_test_results_section(log_files: list[str]) -> None:
     )
 
     baseline_file = preferred_log_for_chart_label(log_files, "baseline")
-    exp_file = preferred_log_for_chart_label(log_files, "dist_155K")
+    exp_file = preferred_log_for_chart_label(log_files, experiment_label)
     if baseline_file is None or exp_file is None:
-        st.info("Test results need baseline and dist_155K logs in `data/logs`.")
+        st.info(
+            f"Test results need baseline and {experiment_label} logs "
+            f"(`data/logs` or `data/length_matched`)."
+        )
         return
 
     baseline_data = parse_training_log(baseline_file)
@@ -140,5 +148,30 @@ def render_primary_test_results_section(log_files: list[str]) -> None:
     render_test_results_section(
         exp_data,
         baseline_data=baseline_data,
-        selected_display=log_display_name(exp_file),
+        selected_display=experiment_display or log_display_name(exp_file),
+    )
+
+
+def render_primary_test_results_section(log_files: list[str]) -> None:
+    """Test metrics for canonical baseline vs dist_155K (no experiment picker)."""
+    render_experiment_pair_test_results_section(log_files, experiment_label="dist_155K")
+
+
+def render_length_matched_test_results_section(log_files: list[str]) -> None:
+    """Test metrics for baseline vs length-matched training."""
+    st.markdown("### Test results (length-matched)")
+    render_experiment_pair_test_results_section(
+        log_files,
+        experiment_label="length_matched",
+        experiment_display="length-matched",
+    )
+
+
+def render_minL8_test_results_section(log_files: list[str]) -> None:
+    """Test metrics for baseline vs minL8 training."""
+    st.markdown("### Test results (minL8)")
+    render_experiment_pair_test_results_section(
+        log_files,
+        experiment_label="minL8",
+        experiment_display="minL8",
     )

@@ -176,7 +176,11 @@ def _plot_metric_line_chart(
         ax.set_ylim(max(0.0, ymin - pad), ymax + pad)
 
 
-def render_performance_comparison_section(*, log_files: list[str]) -> None:
+def render_performance_comparison_section(
+    *,
+    log_files: list[str],
+    profile_log_files: list[str] | None = None,
+) -> None:
     # --- Hidden: 2×2 best-dev line chart (precision / recall / QWK / F1 by experiment)
     # st.markdown("### Performance comparison (all experiments)")
     # st.caption(
@@ -226,4 +230,5 @@ def render_performance_comparison_section(*, log_files: list[str]) -> None:
         render_metric_optimal_profiles_section,
     )
 
-    render_metric_optimal_profiles_section(log_files=log_files)
+    charts_log_files = profile_log_files if profile_log_files is not None else log_files
+    render_metric_optimal_profiles_section(log_files=charts_log_files)

@@ -4,7 +4,12 @@ from typing import Any
 
 import streamlit as st
 
-from tarab_model_experimentation.constants import BAREC_PARQUET_DIR, DEV_PREDICTIONS_DIR
+from tarab_model_experimentation.constants import (
+    BAREC_PARQUET_DIR,
+    DEV_PREDICTIONS_DIR,
+    LENGTH_MATCHED_DEV_PREDICTIONS_CSV,
+    MIN_L8_DEV_PREDICTIONS_CSV,
+)
 
 _DEV_PARQUET = BAREC_PARQUET_DIR / "dev.parquet"
 
@@ -12,6 +17,8 @@ _DEV_PARQUET = BAREC_PARQUET_DIR / "dev.parquet"
 _DEV_PREDICTION_CSV_BY_LABEL: dict[str, Path] = {
     "baseline": DEV_PREDICTIONS_DIR / "dev_bert-base-arabertv02_local_19levels_baseline.csv",
     "dist_155K": DEV_PREDICTIONS_DIR / "dev_bert-base-arabertv02_local_19levels_155k.csv",
+    "length_matched": LENGTH_MATCHED_DEV_PREDICTIONS_CSV,
+    "minL8": MIN_L8_DEV_PREDICTIONS_CSV,
 }
 
 

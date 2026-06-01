@@ -561,6 +561,40 @@ def render_far_off_mistakes_insight(stats: dict[str, Any]) -> None:
     )
 
 
+def render_length_matching_qwk_decomposition_insight() -> None:
+    """Single insight after QWK decomposition on the Length-matching tab."""
+    render_insight_card(
+        tag="Insight",
+        title="Length matching does not fix the shortcut; it reinforces it",
+        bullets=[
+            'The root problem is **"short doesn\'t always mean low"**: ultra-short high-level '
+            "BAREC fragments (titles, headers at L12–L15) are severely underrepresented in "
+            'training, so the model defaults to **"short = low"** as a decision rule.',
+            "Tarab is uniformly short across all 19 levels; there is no length gradient to "
+            "match against in the first place, so length matching cannot introduce a "
+            "meaningful corrective signal. The model's prior for short text is so strongly "
+            "low-level from BAREC that any short Tarab at high levels gets interpreted as "
+            "noise rather than a genuine counter-signal, meaning the original dist_155K was "
+            "not causing catastrophic harm through length. It just wasn't helping either.",
+            "Length matching made things worse: by explicitly sampling short Tarab rows at high "
+            "levels to mirror BAREC's short tail, it added more short-labeled-high examples of "
+            "the wrong domain. Rather than breaking the shortcut, this further entrenched it: "
+            "the model saw even more short text at high levels that it dismissed as noise, while "
+            'the dominant **"short = low"** signal from BAREC and low-level Tarab grew '
+            "relatively stronger.",
+            "The result is more catastrophic errors (94 vs 72), not because length matching "
+            "introduced fundamentally new noise, but because it amplified the existing imbalance "
+            "without providing any credible counter-signal.",
+            "A secondary inverse pattern also exists: low-level text occasionally predicted as "
+            "high, likely driven by a different shortcut: sentences containing formal or rare "
+            "Arabic vocabulary getting pulled toward high levels. This is less dominant and "
+            "contributes fewer catastrophic errors given the asymmetry in squared-distance "
+            "penalties, but confirms the model is over-relying on surface features in both "
+            "directions.",
+        ],
+    )
+
+
 def render_vocab_overlap_insight() -> None:
     """Insight after Tarab ↔ BAREC vocabulary overlap (Inoue et al., WANLP 2021)."""
     render_insight_card(
